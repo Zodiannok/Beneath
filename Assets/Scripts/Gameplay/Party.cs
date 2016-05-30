@@ -1,4 +1,6 @@
-﻿public struct PartyAssignment
+﻿using System;
+
+public struct PartyAssignment
 {
     public Unit AssignedMember;
     public Skill AssignedSkill;
@@ -10,6 +12,14 @@ public enum PartyPosition
     Defense = 0,
     Attack = 1,
     Support = 2,
+}
+
+[Flags]
+public enum PartyPositionFlag
+{
+    Defense = 1 << PartyPosition.Defense,
+    Attack = 1 << PartyPosition.Attack,
+    Support = 1 << PartyPosition.Support,
 }
 
 public class Party {

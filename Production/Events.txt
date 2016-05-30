@@ -1,0 +1,8 @@
+Events:
+
+[Consume] - Skill cost is consumed
+OnCast - When a unit is preparing to use a skill
+[Target] - Generate a list of targets
+OnTargeting - When the target list is generated
+[Cast] - Check again to see if the skill can be used. Use it if so.
+[Effect] - Skill effects apply, may trigger effect events such as heal, damage, buff, etc.

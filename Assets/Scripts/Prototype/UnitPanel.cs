@@ -68,7 +68,7 @@ public class UnitPanel : MonoBehaviour {
         if (unitParty != null)
         {
             Skill assignedSkill = unitParty.GetAssignedSkill(UnitPosition);
-            UnitSkillText.text = assignedSkill.DisplayedName;
+            UnitSkillText.text = assignedSkill.SkillDefinition.DisplayedName;
             UnitSkillUsageText.text = string.Format("{0} / {1}", assignedSkill.SkillCurrentUsage, assignedSkill.SkillMaxUsage);
         }
 	}

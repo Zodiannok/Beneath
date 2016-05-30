@@ -72,6 +72,12 @@ public class Unit
         JoinedParty = null;
     }
 
+    public void ResetCombatStatus()
+    {
+        Status.Armor = 0;
+        Status.Absorb = 0;
+    }
+
     private void SetLevelFullStats(int characterLevel, int itemLevel)
     {
         Status.CharacterLevel = characterLevel;
@@ -93,7 +99,7 @@ public class Unit
 
     public Skill GetSkill(string skillInternalName)
     {
-        return Skills.Find((Skill skill) => skill.InternalName == skillInternalName);
+        return Skills.Find((Skill skill) => skill.SkillDefinition.InternalName == skillInternalName);
     }
 
     public bool IsDead

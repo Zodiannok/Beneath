@@ -5,11 +5,11 @@ using System;
 
 public class SkillLibrary : MonoBehaviour {
 
-    private Dictionary<string, Skill> Skills;
+    private Dictionary<string, SkillDefinition> Skills;
 
 	// Use this for initialization
 	void Start () {
-        Skills = new Dictionary<string, Skill>();
+        Skills = new Dictionary<string, SkillDefinition>();
 
         LoadPredefinedSkills();
 	}
@@ -19,7 +19,7 @@ public class SkillLibrary : MonoBehaviour {
 	
 	}
 
-    bool AddSkillTemplate(Skill template)
+    bool AddSkillTemplate(SkillDefinition template)
     {
         if (template == null)
         {
@@ -35,23 +35,23 @@ public class SkillLibrary : MonoBehaviour {
         return true;
     }
 
-    Skill GetSkillTemplate(string templateName)
+    SkillDefinition GetSkillTemplate(string templateName)
     {
-        Skill result = null;
+        SkillDefinition result = null;
         Skills.TryGetValue(templateName, out result);
         return result;
     }
 
     // Used to create a skill from a template.
-    public Skill CreateSkill(string templateName)
+    Skill CreateSkill(string templateName)
     {
-        Skill template = GetSkillTemplate(templateName);
+        SkillDefinition template = GetSkillTemplate(templateName);
         if (template == null)
         {
             return null;
         }
 
-        return template.Copy();
+        return new Skill(template);
     }
 
     // Used to add a skill to a unit.
@@ -65,6 +65,7 @@ public class SkillLibrary : MonoBehaviour {
         Skill skill = CreateSkill(templateName);
         if (skill != null)
         {
+            skill.Owner = unit;
             unit.Skills.Add(skill);
         }
     }
@@ -72,10 +73,10 @@ public class SkillLibrary : MonoBehaviour {
     private void LoadPredefinedSkills()
     {
         {
-            Skill skill = new Skill();
+            SkillDefinition skill = new SkillDefinition();
             skill.InternalName = "Slash_1";
             skill.DisplayedName = "Slash I";
-            skill.SkillCurrentUsage = skill.SkillMaxUsage = 8;
+            skill.BaseUsage = 8;
             skill.AllowedPositions = PartyPositionFlag.Attack;
             skill.PerformedPhase = CombatPhase.AttackPhase;
             skill.SetTag(SkillTag.Melee, true);
@@ -97,10 +98,10 @@ public class SkillLibrary : MonoBehaviour {
         }
 
         {
-            Skill skill = new Skill();
+            SkillDefinition skill = new SkillDefinition();
             skill.InternalName = "FirstAid_1";
             skill.DisplayedName = "First Aid";
-            skill.SkillCurrentUsage = skill.SkillMaxUsage = 8;
+            skill.BaseUsage = 8;
             skill.AllowedPositions = PartyPositionFlag.Defense | PartyPositionFlag.Support;
             skill.PerformedPhase = CombatPhase.RecoveryPhase;
 
@@ -121,10 +122,10 @@ public class SkillLibrary : MonoBehaviour {
         }
 
         {
-            Skill skill = new Skill();
+            SkillDefinition skill = new SkillDefinition();
             skill.InternalName = "ShieldUp_1";
             skill.DisplayedName = "Shield Up";
-            skill.SkillCurrentUsage = skill.SkillMaxUsage = 8;
+            skill.BaseUsage = 8;
             skill.AllowedPositions = PartyPositionFlag.Defense;
             skill.PerformedPhase = CombatPhase.PreparationPhase;
 
@@ -146,10 +147,10 @@ public class SkillLibrary : MonoBehaviour {
         }
 
         {
-            Skill skill = new Skill();
+            SkillDefinition skill = new SkillDefinition();
             skill.InternalName = "ManaBolt_1";
             skill.DisplayedName = "Mana Bolt I";
-            skill.SkillCurrentUsage = skill.SkillMaxUsage = 8;
+            skill.BaseUsage = 8;
             skill.AllowedPositions = PartyPositionFlag.Support | PartyPositionFlag.Attack;
             skill.PerformedPhase = CombatPhase.ChannelPhase;
             skill.SetTag(SkillTag.Cast, true);

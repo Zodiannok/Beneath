@@ -1,52 +1,37 @@
 ﻿using System;
 using System.Collections.Generic;
 
-// Each action in the combat is divided into two events: declaration and execution.
-// When an action is declared, its cost is applied and the action is now prone to reaction skills.
-// Without any other reaction skills, the action is then immediately executed and its result resolved.
-//
-// However, if a reaction skill is triggered, the reaction skill's declaration and execution will be
-// inserted between the action's declaration and execution. the reaction skill's execution can
-// then further be interrupted by other reaction skills, causing a "stack" of reaction.
-//
-// The stack will not continue infinitely - we can either set a maximum number of reactions allowed,
-// or their cost will eventually make them stop.
-public enum CombatEventType
-{
-    Declare,
-    Execute,
-}
-
 public enum CombatPartyType
 {
+    None,
     Offense,
     Defense,
 }
 
 public class CombatEvent
 {
-    public CombatEvent(CombatPartyType partyType, PartyPosition position, CombatPhase phase, CombatEventType eventType)
+    public CombatEvent(CombatSkillExecuter triggeringSkillExecutor, CombatEventType eventType)
     {
-        Party = partyType;
-        MemberPosition = position;
-        Phase = phase;
-        Event = eventType;
+        CombatResolver resolver = triggeringSkillExecutor.Resolver;
 
-        Targets = null;
-        IsValid = true;
+        Executer = triggeringSkillExecutor;
+
+        Skill = triggeringSkillExecutor.ExecutedSkill;
+        User = Skill.Owner;
+
+        Party = resolver.GetUnitParty(User);
+        Phase = Skill.SkillDefinition.PerformedPhase;
+        Event = eventType;
     }
 
-    public CombatPartyType Party { get; set; }
-    public PartyPosition MemberPosition { get; set; }
-    public CombatPhase Phase { get; set; }
-    public CombatEventType Event { get; set; }
+    public CombatSkillExecuter Executer { get; private set; }
 
-    public Skill Skill { get; set; }
-    public Unit User { get; set; }
+    public CombatPartyType Party { get; private set; }
+    public CombatPhase Phase { get; private set; }
+    public CombatEventType Event { get; private set; }
 
-    public List<Unit> Targets { get; set; }
-
-    public bool IsValid { get; set; }
+    public Skill Skill { get; private set; }
+    public Unit User { get; private set; }
 }
 
 public class CombatEventLog
@@ -99,28 +84,34 @@ public class CombatResolver {
         {
             foreach (PartyPosition position in SkillUsageOrder)
             {
-                if (OffenseParty.GetAssignedSkill(position).PerformedPhase == phase)
+                Skill offenseSkill = OffenseParty.GetAssignedSkill(position);
+                if (offenseSkill != null && offenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    CombatEvent combatEvent = new CombatEvent(CombatPartyType.Offense, position, phase, CombatEventType.Declare);
+                    CombatSkillExecuter executer = new CombatSkillExecuter(this, offenseSkill);
+
+                    CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
                     ResolveDeclareEvent(combatEvent, eventsStack);
 
                     // If the combat event is still valid, execute the event.
-                    if (combatEvent.IsValid)
+                    if (!executer.IsInterrupted)
                     {
-                        combatEvent.Event = CombatEventType.Execute;
+                        combatEvent = new CombatEvent(executer, CombatEventType.Apply);
                         ResolveExecuteEvent(combatEvent, eventsStack);
                     }
                 }
 
-                if (DefenseParty.GetAssignedSkill(position).PerformedPhase == phase)
+                Skill defenseSkill = DefenseParty.GetAssignedSkill(position);
+                if (defenseSkill != null && defenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    CombatEvent combatEvent = new CombatEvent(CombatPartyType.Defense, position, phase, CombatEventType.Declare);
+                    CombatSkillExecuter executer = new CombatSkillExecuter(this, defenseSkill);
+
+                    CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
                     ResolveDeclareEvent(combatEvent, eventsStack);
 
                     // If the combat event is still valid, execute the event.
-                    if (combatEvent.IsValid)
+                    if (!executer.IsInterrupted)
                     {
-                        combatEvent.Event = CombatEventType.Execute;
+                        combatEvent = new CombatEvent(executer, CombatEventType.Apply);
                         ResolveExecuteEvent(combatEvent, eventsStack);
                     }
                 }
@@ -135,11 +126,11 @@ public class CombatResolver {
         // TODO: also do this at clean up?
         foreach (Unit member in OffenseParty.Members)
         {
-            member.Status.Armor = member.Status.Absorb = 0;
+            member.ResetCombatStatus();
         }
         foreach (Unit member in DefenseParty.Members)
         {
-            member.Status.Armor = member.Status.Absorb = 0;
+            member.ResetCombatStatus();
         }
     }
 
@@ -148,37 +139,31 @@ public class CombatResolver {
         // Push the event into stack.
         eventsStack.Push(declareEvent);
 
-        Party userParty;
-        Unit userUnit;
-        Skill userSkill;
-
-        GetEventUser(declareEvent, out userParty, out userUnit, out userSkill);
-        declareEvent.User = userUnit;
-        declareEvent.Skill = userSkill;
+        Unit userUnit = declareEvent.User;
+        Skill userSkill = declareEvent.Skill;
 
         // Check if the skill can be used (user is alive, skill is not used up, etc.)
         if (userUnit == null || userUnit.IsDead)
         {
-            declareEvent.IsValid = false;
+            declareEvent.Executer.Interrupt();
         }
         if (userSkill == null || userSkill.SkillCurrentUsage == 0)
         {
-            declareEvent.IsValid = false;
+            declareEvent.Executer.Interrupt();
         }
 
-        if (declareEvent.IsValid)
+        if (!declareEvent.Executer.IsInterrupted)
         {
-            declareEvent.Targets = new List<Unit>();
-            GetSkillTargets(declareEvent, userSkill, declareEvent.Targets);
+            GetSkillTargets(declareEvent, userSkill, declareEvent.Executer.Targets);
 
             // If we don't have valid targets, then this skill will not be triggered.
-            if (declareEvent.Targets.Count == 0)
+            if (declareEvent.Executer.Targets.Count == 0)
             {
-                declareEvent.IsValid = false;
+                declareEvent.Executer.Interrupt();
             }
         }
 
-        if (declareEvent.IsValid)
+        if (!declareEvent.Executer.IsInterrupted)
         {
             // The skill is now triggered. Decrement skill usage times right now.
             // If another reaction skill cancels this skill, the skill will still be consumed.
@@ -196,7 +181,7 @@ public class CombatResolver {
 
     private void GetSkillTargets(CombatEvent combatEvent, Skill userSkill, List<Unit> targets)
     {
-        if (userSkill == null || userSkill.Targeting == null)
+        if (userSkill == null || userSkill.SkillDefinition.Targeting == null)
         {
             return;
         }
@@ -214,7 +199,7 @@ public class CombatResolver {
             targetParty = OffenseParty;
         }
 
-        userSkill.Targeting.GetTargets(this, combatEvent.User, allyParty, targetParty, targets);
+        userSkill.SkillDefinition.Targeting.GetTargets(this, combatEvent.User, allyParty, targetParty, targets);
     }
 
     private void ResolveExecuteEvent(CombatEvent executeEvent, Stack<CombatEvent> eventsStack)
@@ -223,16 +208,18 @@ public class CombatResolver {
         eventsStack.Push(executeEvent);
 
         // Execute effects on all targets.
-        if (executeEvent.Skill != null && executeEvent.Skill.Effect != null)
+        if (executeEvent.Skill != null && executeEvent.Skill.SkillDefinition.Effect != null)
         {
-            foreach (Unit target in executeEvent.Targets)
+            CombatEventDispatcher dispatcher = new CombatEventDispatcher(this);
+
+            foreach (Unit target in executeEvent.Executer.Targets)
             {
                 CombatEventLog log = new CombatEventLog(executeEvent.Skill);
                 log.LogValues.Add("user", executeEvent.User.Profile.Name);
                 log.LogValues.Add("target", target.Profile.Name);
-                log.LogValues.Add("skillname", executeEvent.Skill.DisplayedName);
+                log.LogValues.Add("skillname", executeEvent.Skill.SkillDefinition.DisplayedName);
 
-                executeEvent.Skill.Effect.Apply(this, executeEvent.User, target, log);
+                executeEvent.Skill.SkillDefinition.Effect.Apply(dispatcher, executeEvent.User, target, log);
                 _CombatEventLog.Add(log);
             }
         }
@@ -242,50 +229,22 @@ public class CombatResolver {
         eventsStack.Pop();
     }
 
-    private void GetEventUser(CombatEvent combatEvent, out Party userParty, out Unit userUnit, out Skill userSkill)
+    // Check all units to handle spells triggered by a combat event.
+    internal void HandleCombatEvent(CombatEvent combatEvent)
     {
-        if (combatEvent.Party == CombatPartyType.Offense)
-        {
-            userParty = OffenseParty;
-        }
-        else
-        {
-            userParty = DefenseParty;
-        }
 
-        userUnit = userParty.GetAssignedUnit(combatEvent.MemberPosition);
-        userSkill = userParty.GetAssignedSkill(combatEvent.MemberPosition);
     }
 
-    // Source unit deals an amount of damage to target unit.
-    // This reduces the health of target, while having the potential of triggering reaction effects.
-    internal void DealDamage(Unit source, Unit target, int damage)
+    internal CombatPartyType GetUnitParty(Unit unit)
     {
-        if (damage > 0)
+        if (OffenseParty.IsPartyMember(unit))
         {
-            target.Status.Life -= damage;
-            if (target.Status.Life <= 0)
-            {
-                // TODO: trigger death event.
-                target.Status.Life = 0;
-            }
+            return CombatPartyType.Offense;
         }
-    }
-
-    internal void RecoverLife(Unit user, Unit target, int recover, bool affectDead)
-    {
-        if (recover > 0)
+        else if (DefenseParty.IsPartyMember(unit))
         {
-            // If the spell does not affect dead, skip units that are dead.
-            if (!affectDead && target.Status.Life == 0)
-            {
-                return;
-            }
-            target.Status.Life += recover;
-            if (target.Status.Life > target.Status.MaxLife)
-            {
-                target.Status.Life = target.Status.MaxLife;
-            }
+            return CombatPartyType.Defense;
         }
+        return CombatPartyType.None;
     }
 }

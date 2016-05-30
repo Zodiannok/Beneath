@@ -3,7 +3,7 @@ using UnityEngine;
 
 public interface ISkillEffect
 {
-    void Apply(CombatResolver resolver, Unit user, Unit target, CombatEventLog log);
+    void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log);
 }
 
 public enum DamageType
@@ -19,7 +19,7 @@ public class AttackEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatResolver resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
     {
         int damage = BaseDamage + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
         if (DamageType == DamageType.Physical && target.Status.Armor > 0)
@@ -59,7 +59,7 @@ public class RecoverEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatResolver resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
     {
         int recover = BaseRecover + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
         resolver.RecoverLife(user, target, recover, false);
@@ -84,7 +84,7 @@ public class ShieldEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatResolver resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
     {
         int shield = BaseShield + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
         if (Type == ShieldType.GrantArmor)

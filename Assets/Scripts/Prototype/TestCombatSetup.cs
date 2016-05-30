@@ -121,7 +121,7 @@ public class TestCombatSetup : MonoBehaviour {
 
         foreach (CombatEventLog log in Resolver.CombatEventLog)
         {
-            string logFormatText = StringTable.GlobalStringTable.Get(log.Skill.LogTextFormat);
+            string logFormatText = StringTable.GlobalStringTable.Get(log.Skill.SkillDefinition.LogTextFormat);
             string logText = StringTable.FormatSubstitute(logFormatText, log.LogValues);
 
             GameObject textObj = Instantiate(CombatLogTextPrefab);
