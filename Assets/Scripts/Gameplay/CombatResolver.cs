@@ -76,7 +76,6 @@ public class CombatResolver {
     {
         _CombatEventLog.Clear();
         InitializeCombatStatus();
-        Stack<CombatEvent> eventsStack = new Stack<CombatEvent>();
 
         // Figure out the action order.
         // Iterate through each phase to see if any action is triggered.
@@ -87,33 +86,13 @@ public class CombatResolver {
                 Skill offenseSkill = OffenseParty.GetAssignedSkill(position);
                 if (offenseSkill != null && offenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    CombatSkillExecuter executer = new CombatSkillExecuter(this, offenseSkill);
-
-                    CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
-                    ResolveDeclareEvent(combatEvent, eventsStack);
-
-                    // If the combat event is still valid, execute the event.
-                    if (!executer.IsInterrupted)
-                    {
-                        combatEvent = new CombatEvent(executer, CombatEventType.Apply);
-                        ResolveExecuteEvent(combatEvent, eventsStack);
-                    }
+                    ResolveSkill(offenseSkill);
                 }
 
                 Skill defenseSkill = DefenseParty.GetAssignedSkill(position);
                 if (defenseSkill != null && defenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    CombatSkillExecuter executer = new CombatSkillExecuter(this, defenseSkill);
-
-                    CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
-                    ResolveDeclareEvent(combatEvent, eventsStack);
-
-                    // If the combat event is still valid, execute the event.
-                    if (!executer.IsInterrupted)
-                    {
-                        combatEvent = new CombatEvent(executer, CombatEventType.Apply);
-                        ResolveExecuteEvent(combatEvent, eventsStack);
-                    }
+                    ResolveSkill(defenseSkill);
                 }
             }
         }
@@ -134,49 +113,71 @@ public class CombatResolver {
         }
     }
 
-    private void ResolveDeclareEvent(CombatEvent declareEvent, Stack<CombatEvent> eventsStack)
+    private void ResolveSkill(Skill skill)
     {
-        // Push the event into stack.
-        eventsStack.Push(declareEvent);
+        CombatSkillExecuter executer = new CombatSkillExecuter(this, skill);
 
+        CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
+        ResolveDeclareEvent(combatEvent);
+
+        // If the combat event is still valid, execute the event.
+        if (!executer.IsInterrupted)
+        {
+            combatEvent = new CombatEvent(executer, CombatEventType.Apply);
+            ResolveExecuteEvent(combatEvent);
+        }
+    }
+
+    private void ResolveDeclareEvent(CombatEvent declareEvent)
+    {
         Unit userUnit = declareEvent.User;
         Skill userSkill = declareEvent.Skill;
+        CombatSkillExecuter executer = declareEvent.Executer;
 
         // Check if the skill can be used (user is alive, skill is not used up, etc.)
         if (userUnit == null || userUnit.IsDead)
         {
-            declareEvent.Executer.Interrupt();
+            executer.Interrupt();
         }
         if (userSkill == null || userSkill.SkillCurrentUsage == 0)
         {
-            declareEvent.Executer.Interrupt();
+            executer.Interrupt();
         }
 
-        if (!declareEvent.Executer.IsInterrupted)
+        if (!executer.IsInterrupted)
         {
-            GetSkillTargets(declareEvent, userSkill, declareEvent.Executer.Targets);
+            GetSkillTargets(declareEvent, userSkill, executer.Targets);
 
             // If we don't have valid targets, then this skill will not be triggered.
-            if (declareEvent.Executer.Targets.Count == 0)
+            if (executer.Targets.Count == 0)
             {
-                declareEvent.Executer.Interrupt();
+                executer.Interrupt();
             }
         }
 
-        if (!declareEvent.Executer.IsInterrupted)
+        if (!executer.IsInterrupted)
         {
             // The skill is now triggered. Decrement skill usage times right now.
             // If another reaction skill cancels this skill, the skill will still be consumed.
             --userSkill.SkillCurrentUsage;
 
-            // TODO: check if any reactions are triggered.
+            // Check if any reactions are triggered.
             // Reactions may modify declareEvent, causing the attempt to use this skill to fail.
             // If this happens, the IsValid field on the event shall also be set to false.
-        }
 
-        // Pop the event from stack.
-        // TODO: output the declaration result into a linear log.
-        eventsStack.Pop();
+            // React to declare event first.
+            HandleCombatEvent(declareEvent, userUnit);
+
+            // Then react to targeting event for each target, if the skill execution is still valid.
+            if (!executer.IsInterrupted)
+            {
+                foreach (Unit targetUnit in executer.Targets)
+                {
+                    CombatEvent targetingEvent = new CombatEvent(executer, CombatEventType.Target);
+                    HandleCombatEvent(targetingEvent, targetUnit);
+                }
+            }
+        }
     }
 
     private void GetSkillTargets(CombatEvent combatEvent, Skill userSkill, List<Unit> targets)
@@ -202,11 +203,8 @@ public class CombatResolver {
         userSkill.SkillDefinition.Targeting.GetTargets(this, combatEvent.User, allyParty, targetParty, targets);
     }
 
-    private void ResolveExecuteEvent(CombatEvent executeEvent, Stack<CombatEvent> eventsStack)
+    private void ResolveExecuteEvent(CombatEvent executeEvent)
     {
-        // Push the event into stack.
-        eventsStack.Push(executeEvent);
-
         // Execute effects on all targets.
         if (executeEvent.Skill != null && executeEvent.Skill.SkillDefinition.Effect != null)
         {
@@ -222,17 +220,41 @@ public class CombatResolver {
                 executeEvent.Skill.SkillDefinition.Effect.Apply(dispatcher, executeEvent.User, target, log);
                 _CombatEventLog.Add(log);
             }
-        }
 
-        // Pop the event from stack.
-        // TODO: output the declaration result into a linear log.
-        eventsStack.Pop();
+            // Trigger execute event after skill usage.
+            HandleCombatEvent(executeEvent, executeEvent.User);
+        }
     }
 
     // Check all units to handle spells triggered by a combat event.
-    internal void HandleCombatEvent(CombatEvent combatEvent)
+    internal void HandleCombatEvent(CombatEvent combatEvent, Unit eventTarget)
     {
+        CombatEventDispatcher dispatcher = new CombatEventDispatcher(this);
 
+        foreach (PartyPosition position in SkillUsageOrder)
+        {
+            Skill offenseSkill = OffenseParty.GetAssignedSkill(position);
+            if (offenseSkill != null && offenseSkill.SkillDefinition.PerformedPhase == CombatPhase.ReactionPhase)
+            {
+                ISkillTriggering triggering = offenseSkill.SkillDefinition.Triggering;
+                if (triggering != null && triggering.CanReact(dispatcher, offenseSkill.Owner, combatEvent, eventTarget))
+                {
+                    // Trigger skill.
+                    ResolveSkill(offenseSkill);
+                }
+            }
+
+            Skill defenseSkill = DefenseParty.GetAssignedSkill(position);
+            if (defenseSkill != null && defenseSkill.SkillDefinition.PerformedPhase == CombatPhase.ReactionPhase)
+            {
+                ISkillTriggering triggering = defenseSkill.SkillDefinition.Triggering;
+                if (triggering != null && triggering.CanReact(dispatcher, defenseSkill.Owner, combatEvent, eventTarget))
+                {
+                    // Trigger skill.
+                    ResolveSkill(defenseSkill);
+                }
+            }
+        }
     }
 
     internal CombatPartyType GetUnitParty(Unit unit)

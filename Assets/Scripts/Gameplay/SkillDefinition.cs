@@ -62,6 +62,9 @@ public class SkillDefinition {
     // TODO: If we are going to support list of effects, we may need multiple criterias for each skill.
     public ISkillTargeting Targeting { get; set; }
 
+    // Triggering criteria of this skill. Checked when PerformedPhase == CombatPhase.ReactionPhase.
+    public ISkillTriggering Triggering { get; set; }
+
     #region Display Methods
 
     // Format of the log text. This is a string key to the actual string in the global string table.

@@ -170,6 +170,34 @@ public class SkillLibrary : MonoBehaviour {
 
             AddSkillTemplate(skill);
         }
+
+        {
+            SkillDefinition skill = new SkillDefinition();
+            skill.InternalName = "Counterspell_1";
+            skill.DisplayedName = "Counterspell I";
+            skill.BaseUsage = 6;
+            skill.AllowedPositions = PartyPositionFlag.Support;
+            skill.PerformedPhase = CombatPhase.ReactionPhase;
+            skill.SetTag(SkillTag.Cast, true);
+            skill.SetTag(SkillTag.Ranged, true);
+
+            AttackEffect effect = new AttackEffect();
+            effect.DamageType = DamageType.Magic;
+            effect.BaseDamage = 6;
+            effect.CharacterScaling = 1.0f;
+            effect.ItemScaling = 0.5f;
+            skill.Effect = effect;
+
+            StandardSingleTargeting targeting = new StandardSingleTargeting();
+            skill.Targeting = targeting;
+
+            InterruptCastingTrigger triggering = new InterruptCastingTrigger();
+            skill.Triggering = triggering;
+
+            skill.LogTextFormat = "Generic_Attack_EffectLogText";
+
+            AddSkillTemplate(skill);
+        }
     }
 
 }

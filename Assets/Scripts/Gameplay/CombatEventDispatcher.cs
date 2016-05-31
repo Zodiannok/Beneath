@@ -12,6 +12,12 @@ public class CombatEventDispatcher {
         Resolver = resolver;
     }
 
+    // Gets the party of a unit.
+    public CombatPartyType GetUnitParty(Unit unit)
+    {
+        return Resolver.GetUnitParty(unit);
+    }
+
     // Notifys the combat resolver that a skill is going to be used by a unit.
     // Checks if any skill should then react to this.
     public void NotifyPreCast(Unit source, Skill skill)
