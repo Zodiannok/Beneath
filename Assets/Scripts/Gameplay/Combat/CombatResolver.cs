@@ -10,7 +10,7 @@ public enum CombatPartyType
 
 public class CombatEvent
 {
-    public CombatEvent(CombatSkillExecuter triggeringSkillExecutor, CombatEventType eventType)
+    public CombatEvent(CombatSkillExecuter triggeringSkillExecutor, CombatEventType eventType, Unit eventTarget)
     {
         CombatResolver resolver = triggeringSkillExecutor.Resolver;
 
@@ -22,6 +22,7 @@ public class CombatEvent
         Party = resolver.GetUnitParty(User);
         Phase = Skill.SkillDefinition.PerformedPhase;
         Event = eventType;
+        Target = eventTarget;
     }
 
     public CombatSkillExecuter Executer { get; private set; }
@@ -32,6 +33,7 @@ public class CombatEvent
 
     public Skill Skill { get; private set; }
     public Unit User { get; private set; }
+    public Unit Target { get; private set; }
 }
 
 public class CombatEventLog
@@ -116,23 +118,19 @@ public class CombatResolver {
     private void ResolveSkill(Skill skill)
     {
         CombatSkillExecuter executer = new CombatSkillExecuter(this, skill);
-
-        CombatEvent combatEvent = new CombatEvent(executer, CombatEventType.Declare);
-        ResolveDeclareEvent(combatEvent);
+        ResolveDeclareEvent(executer);
 
         // If the combat event is still valid, execute the event.
         if (!executer.IsInterrupted)
         {
-            combatEvent = new CombatEvent(executer, CombatEventType.Apply);
-            ResolveExecuteEvent(combatEvent);
+            ResolveExecuteEvent(executer);
         }
     }
 
-    private void ResolveDeclareEvent(CombatEvent declareEvent)
+    private void ResolveDeclareEvent(CombatSkillExecuter executer)
     {
-        Unit userUnit = declareEvent.User;
-        Skill userSkill = declareEvent.Skill;
-        CombatSkillExecuter executer = declareEvent.Executer;
+        Skill userSkill = executer.ExecutedSkill;
+        Unit userUnit = userSkill.Owner;
 
         // Check if the skill can be used (user is alive, skill is not used up, etc.)
         if (userUnit == null || userUnit.IsDead)
@@ -146,7 +144,7 @@ public class CombatResolver {
 
         if (!executer.IsInterrupted)
         {
-            GetSkillTargets(declareEvent, userSkill, executer.Targets);
+            GetSkillTargets(executer);
 
             // If we don't have valid targets, then this skill will not be triggered.
             if (executer.Targets.Count == 0)
@@ -166,22 +164,26 @@ public class CombatResolver {
             // If this happens, the IsValid field on the event shall also be set to false.
 
             // React to declare event first.
-            HandleCombatEvent(declareEvent, userUnit);
+            CombatEvent declareEvent = new CombatEvent(executer, CombatEventType.Declare, userUnit);
+            HandleCombatEvent(declareEvent);
 
             // Then react to targeting event for each target, if the skill execution is still valid.
             if (!executer.IsInterrupted)
             {
                 foreach (Unit targetUnit in executer.Targets)
                 {
-                    CombatEvent targetingEvent = new CombatEvent(executer, CombatEventType.Target);
-                    HandleCombatEvent(targetingEvent, targetUnit);
+                    CombatEvent targetingEvent = new CombatEvent(executer, CombatEventType.Target, targetUnit);
+                    HandleCombatEvent(targetingEvent);
                 }
             }
         }
     }
 
-    private void GetSkillTargets(CombatEvent combatEvent, Skill userSkill, List<Unit> targets)
+    private void GetSkillTargets(CombatSkillExecuter executer)
     {
+        Skill userSkill = executer.ExecutedSkill;
+        Unit userUnit = userSkill.Owner;
+
         if (userSkill == null || userSkill.SkillDefinition.Targeting == null)
         {
             return;
@@ -189,7 +191,7 @@ public class CombatResolver {
 
         Party allyParty;
         Party targetParty;
-        if (combatEvent.Party == CombatPartyType.Offense)
+        if (GetUnitParty(userUnit) == CombatPartyType.Offense)
         {
             allyParty = OffenseParty;
             targetParty = DefenseParty;
@@ -200,34 +202,38 @@ public class CombatResolver {
             targetParty = OffenseParty;
         }
 
-        userSkill.SkillDefinition.Targeting.GetTargets(this, combatEvent.User, allyParty, targetParty, targets);
+        userSkill.SkillDefinition.Targeting.GetTargets(this, userUnit, allyParty, targetParty, executer.Targets);
     }
 
-    private void ResolveExecuteEvent(CombatEvent executeEvent)
+    private void ResolveExecuteEvent(CombatSkillExecuter executer)
     {
+        Skill userSkill = executer.ExecutedSkill;
+
         // Execute effects on all targets.
-        if (executeEvent.Skill != null && executeEvent.Skill.SkillDefinition.Effect != null)
+        if (userSkill != null && userSkill.SkillDefinition.Effect != null)
         {
             CombatEventDispatcher dispatcher = new CombatEventDispatcher(this);
+            Unit userUnit = userSkill.Owner;
 
-            foreach (Unit target in executeEvent.Executer.Targets)
+            foreach (Unit target in executer.Targets)
             {
-                CombatEventLog log = new CombatEventLog(executeEvent.Skill);
-                log.LogValues.Add("user", executeEvent.User.Profile.Name);
+                CombatEventLog log = new CombatEventLog(userSkill);
+                log.LogValues.Add("user", userUnit.Profile.Name);
                 log.LogValues.Add("target", target.Profile.Name);
-                log.LogValues.Add("skillname", executeEvent.Skill.SkillDefinition.DisplayedName);
+                log.LogValues.Add("skillname", userSkill.SkillDefinition.DisplayedName);
 
-                executeEvent.Skill.SkillDefinition.Effect.Apply(dispatcher, executeEvent.User, target, log);
+                userSkill.SkillDefinition.Effect.Apply(dispatcher, userUnit, target, log);
                 _CombatEventLog.Add(log);
             }
 
             // Trigger execute event after skill usage.
-            HandleCombatEvent(executeEvent, executeEvent.User);
+            CombatEvent executeEvent = new CombatEvent(executer, CombatEventType.Apply, userUnit);
+            HandleCombatEvent(executeEvent);
         }
     }
 
     // Check all units to handle spells triggered by a combat event.
-    internal void HandleCombatEvent(CombatEvent combatEvent, Unit eventTarget)
+    internal void HandleCombatEvent(CombatEvent combatEvent)
     {
         CombatEventDispatcher dispatcher = new CombatEventDispatcher(this);
 
@@ -237,7 +243,7 @@ public class CombatResolver {
             if (offenseSkill != null && offenseSkill.SkillDefinition.PerformedPhase == CombatPhase.ReactionPhase)
             {
                 ISkillTriggering triggering = offenseSkill.SkillDefinition.Triggering;
-                if (triggering != null && triggering.CanReact(dispatcher, offenseSkill.Owner, combatEvent, eventTarget))
+                if (triggering != null && triggering.CanReact(dispatcher, offenseSkill.Owner, combatEvent))
                 {
                     // Trigger skill.
                     ResolveSkill(offenseSkill);
@@ -248,7 +254,7 @@ public class CombatResolver {
             if (defenseSkill != null && defenseSkill.SkillDefinition.PerformedPhase == CombatPhase.ReactionPhase)
             {
                 ISkillTriggering triggering = defenseSkill.SkillDefinition.Triggering;
-                if (triggering != null && triggering.CanReact(dispatcher, defenseSkill.Owner, combatEvent, eventTarget))
+                if (triggering != null && triggering.CanReact(dispatcher, defenseSkill.Owner, combatEvent))
                 {
                     // Trigger skill.
                     ResolveSkill(defenseSkill);

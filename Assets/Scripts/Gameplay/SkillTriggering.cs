@@ -10,12 +10,12 @@ using System;
 public interface ISkillTriggering
 {
     // Check if this skill should react to combat event happening on target.
-    bool CanReact(CombatEventDispatcher dispatcher, Unit skillOwner, CombatEvent combatEvent, Unit target);
+    bool CanReact(CombatEventDispatcher dispatcher, Unit skillOwner, CombatEvent combatEvent);
 }
 
 public class InterruptCastingTrigger : ISkillTriggering
 {
-    public bool CanReact(CombatEventDispatcher dispatcher, Unit skillOwner, CombatEvent combatEvent, Unit target)
+    public bool CanReact(CombatEventDispatcher dispatcher, Unit skillOwner, CombatEvent combatEvent)
     {
         // Triggered by Declare event.
         if (combatEvent.Event != CombatEventType.Declare)

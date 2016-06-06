@@ -115,4 +115,30 @@ public class CombatSkillExecuter {
     {
         IsInterrupted = true;
     }
+
+    // Generate skill targets list
+    public void GenerateSkillTargets()
+    {
+        Targets.Clear();
+        if (ExecutedSkill == null || ExecutedSkill.SkillDefinition.Targeting == null)
+        {
+            return;
+        }
+
+        Unit userUnit = ExecutedSkill.Owner;
+        Party allyParty;
+        Party targetParty;
+        if (Resolver.GetUnitParty(userUnit) == CombatPartyType.Offense)
+        {
+            allyParty = Resolver.OffenseParty;
+            targetParty = Resolver.DefenseParty;
+        }
+        else
+        {
+            allyParty = Resolver.DefenseParty;
+            targetParty = Resolver.OffenseParty;
+        }
+
+        ExecutedSkill.SkillDefinition.Targeting.GetTargets(Resolver, userUnit, allyParty, targetParty, Targets);
+    }
 }
