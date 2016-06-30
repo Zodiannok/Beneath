@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 public interface ISkillTargeting
 {
-    void GetTargets(CombatResolver resolver, Unit user, Party allyParty, Party opponentParty, List<Unit> targets);
+    void GetTargets(CombatResolver resolver, CombatUnit user, List<CombatUnit> targets);
 }
 
 public class StandardSingleTargeting : ISkillTargeting
@@ -11,12 +11,13 @@ public class StandardSingleTargeting : ISkillTargeting
     // When a skill uses "standard targeting", it targets members of a party in this order.
     public static readonly PartyPosition[] SkillTargetOrder = { PartyPosition.Defense, PartyPosition.Attack, PartyPosition.Support };
 
-    public void GetTargets(CombatResolver resolver, Unit user, Party allyParty, Party opponentParty, List<Unit> targets)
+    public void GetTargets(CombatResolver resolver, CombatUnit user, List<CombatUnit> targets)
     {
+        CombatPartyType opponentParty = user.OpponentParty;
         foreach (PartyPosition position in SkillTargetOrder)
         {
-            Unit targetUnit = opponentParty.GetAssignedUnit(position);
-            if (targetUnit != null && !targetUnit.IsDead)
+            CombatUnit targetUnit = resolver.GetCombatUnit(opponentParty, position);
+            if (targetUnit != null && !targetUnit.Unit.IsDead)
             {
                 targets.Add(targetUnit);
                 break;
@@ -33,11 +34,11 @@ public class LowestHealthTargeting : ISkillTargeting
     // Is "lowest health" calculated by percentage or by absolute value?
     public bool ByPercentage { get; set; }
 
-    public void GetTargets(CombatResolver resolver, Unit user, Party allyParty, Party opponentParty, List<Unit> targets)
+    public void GetTargets(CombatResolver resolver, CombatUnit user, List<CombatUnit> targets)
     {
-        Party targetParty = TargetAllyParty ? allyParty : opponentParty;
+        CombatPartyType targetParty = TargetAllyParty ? user.CombatParty : user.OpponentParty;
 
-        Unit targetUnit = null;
+        CombatUnit targetUnit = null;
         if (ByPercentage)
         {
             float percentage = 0.0f;
@@ -45,10 +46,10 @@ public class LowestHealthTargeting : ISkillTargeting
             // it prioritize the unit with standard targeting order.
             foreach (PartyPosition position in StandardSingleTargeting.SkillTargetOrder)
             {
-                Unit member = targetParty.GetAssignedUnit(position);
-                if (member != null && !member.IsDead)
+                CombatUnit member = resolver.GetCombatUnit(targetParty, position);
+                if (member != null && !member.Unit.IsDead)
                 {
-                    float percentageLife = (float)member.Status.Life / (float)member.Status.MaxLife;
+                    float percentageLife = (float)member.Unit.Status.Life / (float)member.Unit.Status.MaxLife;
                     if (targetUnit == null || percentageLife < percentage)
                     {
                         targetUnit = member;
@@ -63,13 +64,13 @@ public class LowestHealthTargeting : ISkillTargeting
             // Same prioritization as the percentage case.
             foreach (PartyPosition position in StandardSingleTargeting.SkillTargetOrder)
             {
-                Unit member = targetParty.GetAssignedUnit(position);
-                if (member != null && !member.IsDead)
+                CombatUnit member = resolver.GetCombatUnit(targetParty, position);
+                if (member != null && !member.Unit.IsDead)
                 {
-                    if (targetUnit == null || member.Status.Life < life)
+                    if (targetUnit == null || member.Unit.Status.Life < life)
                     {
                         targetUnit = member;
-                        life = member.Status.Life;
+                        life = member.Unit.Status.Life;
                     }
                 }
             }
@@ -88,10 +89,10 @@ public class PositionTargeting : ISkillTargeting
     public bool TargetAlly { get; set; }
     public PartyPosition Position { get; set; }
 
-    public void GetTargets(CombatResolver resolver, Unit user, Party allyParty, Party opponentParty, List<Unit> targets)
+    public void GetTargets(CombatResolver resolver, CombatUnit user, List<CombatUnit> targets)
     {
-        Party targetedParty = TargetAlly ? allyParty : opponentParty;
-        Unit targetedUnit = targetedParty.GetAssignedUnit(Position);
+        CombatPartyType targetedParty = TargetAlly ? user.CombatParty : user.OpponentParty;
+        CombatUnit targetedUnit = resolver.GetCombatUnit(targetedParty, Position);
 
         if (targetedUnit != null)
         {

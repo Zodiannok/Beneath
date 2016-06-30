@@ -10,16 +10,16 @@ public enum CombatPartyType
 
 public class CombatEvent
 {
-    public CombatEvent(CombatSkillExecuter triggeringSkillExecutor, CombatEventType eventType, Unit eventTarget)
+    public CombatEvent(CombatSkillExecuter triggeringSkillExecutor, CombatEventType eventType, CombatUnit eventTarget)
     {
         CombatResolver resolver = triggeringSkillExecutor.Resolver;
 
         Executer = triggeringSkillExecutor;
 
         Skill = triggeringSkillExecutor.ExecutedSkill;
-        User = Skill.Owner;
+        User = triggeringSkillExecutor.Owner;
 
-        Party = resolver.GetUnitParty(User);
+        Party = User.CombatParty;
         Phase = Skill.SkillDefinition.PerformedPhase;
         Event = eventType;
         Target = eventTarget;
@@ -32,8 +32,8 @@ public class CombatEvent
     public CombatEventType Event { get; private set; }
 
     public Skill Skill { get; private set; }
-    public Unit User { get; private set; }
-    public Unit Target { get; private set; }
+    public CombatUnit User { get; private set; }
+    public CombatUnit Target { get; private set; }
 }
 
 public class CombatEventLog
@@ -63,6 +63,10 @@ public class CombatResolver {
 
     public IList<CombatEventLog> CombatEventLog { get { return _CombatEventLog; } }
 
+    // Store the CombatUnits created to reflect combat status of participating units.
+    private CombatUnit[] _OffenseCombatUnits;
+    private CombatUnit[] _DefenseCombatUnits;
+
     // Event log. Stores all actions in chronological order.
     private List<CombatEventLog> _CombatEventLog;
 
@@ -72,6 +76,8 @@ public class CombatResolver {
         DefenseParty = defense;
 
         _CombatEventLog = new List<CombatEventLog>();
+        _OffenseCombatUnits = new CombatUnit[Party.MaxAssignments];
+        _DefenseCombatUnits = new CombatUnit[Party.MaxAssignments];
     }
 
     public void GenerateAllCombatEvents()
@@ -88,13 +94,13 @@ public class CombatResolver {
                 Skill offenseSkill = OffenseParty.GetAssignedSkill(position);
                 if (offenseSkill != null && offenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    ResolveSkill(offenseSkill);
+                    ResolveSkill(GetCombatUnit(CombatPartyType.Offense, position));
                 }
 
                 Skill defenseSkill = DefenseParty.GetAssignedSkill(position);
                 if (defenseSkill != null && defenseSkill.SkillDefinition.PerformedPhase == phase)
                 {
-                    ResolveSkill(defenseSkill);
+                    ResolveSkill(GetCombatUnit(CombatPartyType.Defense, position));
                 }
             }
         }
@@ -103,21 +109,18 @@ public class CombatResolver {
     // Initializes party status to make sure all values are set to the start of the combat.
     private void InitializeCombatStatus()
     {
-        // Resets armor and absorb to 0.
-        // TODO: also do this at clean up?
-        foreach (Unit member in OffenseParty.Members)
+        foreach (PartyPosition position in SkillUsageOrder)
         {
-            member.ResetCombatStatus();
-        }
-        foreach (Unit member in DefenseParty.Members)
-        {
-            member.ResetCombatStatus();
+            CombatUnit offenseCombatUnit = new CombatUnit(this, CombatPartyType.Offense, position);
+            _OffenseCombatUnits[(int)position] = offenseCombatUnit;
+            CombatUnit defenseCombatUnit = new CombatUnit(this, CombatPartyType.Defense, position);
+            _DefenseCombatUnits[(int)position] = defenseCombatUnit;
         }
     }
 
-    private void ResolveSkill(Skill skill)
+    private void ResolveSkill(CombatUnit skillOwner)
     {
-        CombatSkillExecuter executer = new CombatSkillExecuter(this, skill);
+        CombatSkillExecuter executer = new CombatSkillExecuter(this, skillOwner);
         ResolveDeclareEvent(executer);
 
         // If the combat event is still valid, execute the event.
@@ -130,10 +133,10 @@ public class CombatResolver {
     private void ResolveDeclareEvent(CombatSkillExecuter executer)
     {
         Skill userSkill = executer.ExecutedSkill;
-        Unit userUnit = userSkill.Owner;
+        CombatUnit user = executer.Owner;
 
         // Check if the skill can be used (user is alive, skill is not used up, etc.)
-        if (userUnit == null || userUnit.IsDead)
+        if (user.Unit == null || user.Unit.IsDead)
         {
             executer.Interrupt();
         }
@@ -144,7 +147,7 @@ public class CombatResolver {
 
         if (!executer.IsInterrupted)
         {
-            GetSkillTargets(executer);
+            executer.GenerateSkillTargets();
 
             // If we don't have valid targets, then this skill will not be triggered.
             if (executer.Targets.Count == 0)
@@ -164,45 +167,19 @@ public class CombatResolver {
             // If this happens, the IsValid field on the event shall also be set to false.
 
             // React to declare event first.
-            CombatEvent declareEvent = new CombatEvent(executer, CombatEventType.Declare, userUnit);
+            CombatEvent declareEvent = new CombatEvent(executer, CombatEventType.Declare, user);
             HandleCombatEvent(declareEvent);
 
             // Then react to targeting event for each target, if the skill execution is still valid.
             if (!executer.IsInterrupted)
             {
-                foreach (Unit targetUnit in executer.Targets)
+                foreach (CombatUnit targetUnit in executer.Targets)
                 {
                     CombatEvent targetingEvent = new CombatEvent(executer, CombatEventType.Target, targetUnit);
                     HandleCombatEvent(targetingEvent);
                 }
             }
         }
-    }
-
-    private void GetSkillTargets(CombatSkillExecuter executer)
-    {
-        Skill userSkill = executer.ExecutedSkill;
-        Unit userUnit = userSkill.Owner;
-
-        if (userSkill == null || userSkill.SkillDefinition.Targeting == null)
-        {
-            return;
-        }
-
-        Party allyParty;
-        Party targetParty;
-        if (GetUnitParty(userUnit) == CombatPartyType.Offense)
-        {
-            allyParty = OffenseParty;
-            targetParty = DefenseParty;
-        }
-        else
-        {
-            allyParty = DefenseParty;
-            targetParty = OffenseParty;
-        }
-
-        userSkill.SkillDefinition.Targeting.GetTargets(this, userUnit, allyParty, targetParty, executer.Targets);
     }
 
     private void ResolveExecuteEvent(CombatSkillExecuter executer)
@@ -213,13 +190,13 @@ public class CombatResolver {
         if (userSkill != null && userSkill.SkillDefinition.Effect != null)
         {
             CombatEventDispatcher dispatcher = new CombatEventDispatcher(this);
-            Unit userUnit = userSkill.Owner;
+            CombatUnit userUnit = executer.Owner;
 
-            foreach (Unit target in executer.Targets)
+            foreach (CombatUnit target in executer.Targets)
             {
                 CombatEventLog log = new CombatEventLog(userSkill);
-                log.LogValues.Add("user", userUnit.Profile.Name);
-                log.LogValues.Add("target", target.Profile.Name);
+                log.LogValues.Add("user", userUnit.Unit.Profile.Name);
+                log.LogValues.Add("target", target.Unit.Profile.Name);
                 log.LogValues.Add("skillname", userSkill.SkillDefinition.DisplayedName);
 
                 userSkill.SkillDefinition.Effect.Apply(dispatcher, userUnit, target, log);
@@ -246,7 +223,7 @@ public class CombatResolver {
                 if (triggering != null && triggering.CanReact(dispatcher, offenseSkill.Owner, combatEvent))
                 {
                     // Trigger skill.
-                    ResolveSkill(offenseSkill);
+                    ResolveSkill(GetCombatUnit(CombatPartyType.Offense, position));
                 }
             }
 
@@ -257,7 +234,7 @@ public class CombatResolver {
                 if (triggering != null && triggering.CanReact(dispatcher, defenseSkill.Owner, combatEvent))
                 {
                     // Trigger skill.
-                    ResolveSkill(defenseSkill);
+                    ResolveSkill(GetCombatUnit(CombatPartyType.Defense, position));
                 }
             }
         }
@@ -274,5 +251,31 @@ public class CombatResolver {
             return CombatPartyType.Defense;
         }
         return CombatPartyType.None;
+    }
+
+    internal Party GetPartyReference(CombatPartyType partyType)
+    {
+        if (partyType == CombatPartyType.Offense)
+        {
+            return OffenseParty;
+        }
+        else if (partyType == CombatPartyType.Defense)
+        {
+            return DefenseParty;
+        }
+        return null;
+    }
+
+    internal CombatUnit GetCombatUnit(CombatPartyType partyType, PartyPosition position)
+    {
+        if (partyType == CombatPartyType.Offense)
+        {
+            return _OffenseCombatUnits[(int)position];
+        }
+        else if (partyType == CombatPartyType.Defense)
+        {
+            return _DefenseCombatUnits[(int)position];
+        }
+        return null;
     }
 }

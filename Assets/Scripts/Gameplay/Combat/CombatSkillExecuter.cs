@@ -35,6 +35,7 @@ public class CombatSkillExecuter {
     public CombatEventType CurrentStage { get; private set; }
 
     public CombatResolver Resolver { get; private set; }
+    public CombatUnit Owner { get; private set; }
     public Skill ExecutedSkill { get; private set; }
 
     public bool IsInterrupted { get; private set; }
@@ -47,19 +48,20 @@ public class CombatSkillExecuter {
         }
     }
 
-    public List<Unit> Targets { get; private set; }
+    public List<CombatUnit> Targets { get; private set; }
 
-    public CombatSkillExecuter(CombatResolver resolver, Skill skillToExecute)
+    public CombatSkillExecuter(CombatResolver resolver, CombatUnit combatUnit)
     {
         IsStarted = false;
         IsComplete = false;
         CurrentStage = CombatEventType.Declare;
 
         Resolver = resolver;
-        ExecutedSkill = skillToExecute;
+        Owner = combatUnit;
+        ExecutedSkill = Owner.Skill;
         IsInterrupted = false;
 
-        Targets = new List<Unit>();
+        Targets = new List<CombatUnit>();
     }
 
     // Advance to declare stage.
@@ -125,20 +127,6 @@ public class CombatSkillExecuter {
             return;
         }
 
-        Unit userUnit = ExecutedSkill.Owner;
-        Party allyParty;
-        Party targetParty;
-        if (Resolver.GetUnitParty(userUnit) == CombatPartyType.Offense)
-        {
-            allyParty = Resolver.OffenseParty;
-            targetParty = Resolver.DefenseParty;
-        }
-        else
-        {
-            allyParty = Resolver.DefenseParty;
-            targetParty = Resolver.OffenseParty;
-        }
-
-        ExecutedSkill.SkillDefinition.Targeting.GetTargets(Resolver, userUnit, allyParty, targetParty, Targets);
+        ExecutedSkill.SkillDefinition.Targeting.GetTargets(Resolver, Owner, Targets);
     }
 }

@@ -24,8 +24,8 @@ public enum PartyPositionFlag
 
 public class Party {
 
-    public readonly int MaxPartySize = 3;
-    public readonly int MaxAssignments = 3;
+    public static readonly int MaxPartySize = 3;
+    public static readonly int MaxAssignments = 3;
 
     public Unit[] Members;
     public PartyAssignment[] Assignment;
@@ -133,6 +133,20 @@ public class Party {
             }
         }
         return PartyPosition.NotAssigned;
+    }
+
+    // Get ALL positions that the member is assigned to.
+    public PartyPositionFlag GetAllAssignedPositions(Unit member)
+    {
+        PartyPositionFlag flag = 0;
+        for (int i = 0; i < MaxAssignments; ++i)
+        {
+            if (Assignment[i].AssignedMember == member)
+            {
+                flag |= (PartyPositionFlag)(1 << i);
+            }
+        }
+        return flag;
     }
 
     // Find a usable skill when a member is assigned to a specified position.

@@ -13,14 +13,6 @@ public class UnitStatus
     public int ItemLevel { get; set; }
     public int Life { get; set; }
     public int MaxLife { get; set; }
-
-    // Both armor and absorb are in-combat only damage mitigation tools.
-
-    // Armor reduces physical damages taken (not consumed).
-    public int Armor { get; set; }
-
-    // Absorb reduces all damages taken (consumed).
-    public int Absorb { get; set; }
 }
 
 public class Unit
@@ -70,12 +62,6 @@ public class Unit
         }
 
         JoinedParty = null;
-    }
-
-    public void ResetCombatStatus()
-    {
-        Status.Armor = 0;
-        Status.Absorb = 0;
     }
 
     private void SetLevelFullStats(int characterLevel, int itemLevel)

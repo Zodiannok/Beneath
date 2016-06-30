@@ -3,7 +3,7 @@ using UnityEngine;
 
 public interface ISkillEffect
 {
-    void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log);
+    void Apply(CombatEventDispatcher resolver, CombatUnit user, CombatUnit target, CombatEventLog log);
 }
 
 public enum DamageType
@@ -19,12 +19,12 @@ public class AttackEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, CombatUnit user, CombatUnit target, CombatEventLog log)
     {
-        int damage = BaseDamage + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
-        if (DamageType == DamageType.Physical && target.Status.Armor > 0)
+        int damage = BaseDamage + Mathf.FloorToInt(user.Unit.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Unit.Status.ItemLevel * ItemScaling);
+        if (DamageType == DamageType.Physical && target.CombatStatus.Armor > 0)
         {
-            int mitigated = Math.Min(damage, target.Status.Armor);
+            int mitigated = Math.Min(damage, target.CombatStatus.Armor);
             damage -= mitigated;
 
             if (log != null)
@@ -32,11 +32,11 @@ public class AttackEffect : ISkillEffect
                 log.LogValues.Add("mitigated", mitigated.ToString());
             }
         }
-        if (damage > 0 && target.Status.Absorb > 0)
+        if (damage > 0 && target.CombatStatus.Absorb > 0)
         {
-            int absorbed = Math.Min(damage, target.Status.Absorb);
+            int absorbed = Math.Min(damage, target.CombatStatus.Absorb);
             damage -= absorbed;
-            target.Status.Absorb -= absorbed;
+            target.CombatStatus.Absorb -= absorbed;
 
             if (log != null)
             {
@@ -44,7 +44,7 @@ public class AttackEffect : ISkillEffect
             }
         }
 
-        resolver.DealDamage(user, target, damage);
+        resolver.DealDamage(user.Unit, target.Unit, damage);
 
         if (log != null)
         {
@@ -59,10 +59,10 @@ public class RecoverEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, CombatUnit user, CombatUnit target, CombatEventLog log)
     {
-        int recover = BaseRecover + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
-        resolver.RecoverLife(user, target, recover, false);
+        int recover = BaseRecover + Mathf.FloorToInt(user.Unit.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Unit.Status.ItemLevel * ItemScaling);
+        resolver.RecoverLife(user.Unit, target.Unit, recover, false);
 
         if (log != null)
         {
@@ -84,16 +84,16 @@ public class ShieldEffect : ISkillEffect
     public float CharacterScaling { get; set; }
     public float ItemScaling { get; set; }
 
-    public void Apply(CombatEventDispatcher resolver, Unit user, Unit target, CombatEventLog log)
+    public void Apply(CombatEventDispatcher resolver, CombatUnit user, CombatUnit target, CombatEventLog log)
     {
-        int shield = BaseShield + Mathf.FloorToInt(user.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Status.ItemLevel * ItemScaling);
+        int shield = BaseShield + Mathf.FloorToInt(user.Unit.Status.CharacterLevel * CharacterScaling) + Mathf.FloorToInt(user.Unit.Status.ItemLevel * ItemScaling);
         if (Type == ShieldType.GrantArmor)
         {
-            target.Status.Armor += shield;
+            target.CombatStatus.Armor += shield;
         }
         else
         {
-            target.Status.Absorb += shield;
+            target.CombatStatus.Absorb += shield;
         }
 
         if (log != null)
