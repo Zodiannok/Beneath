@@ -11,10 +11,15 @@ public class CombatUnitStatus
     // Absorb reduces all damages taken (consumed).
     public int Absorb { get; set; }
 
+    // Indicates whether the combat unit's skill has been used.
+    public bool SkillUsed { get; set; }
+
     public void Reset()
     {
         Armor = 0;
         Absorb = 0;
+
+        SkillUsed = false;
     }
 }
 
@@ -29,8 +34,6 @@ public class CombatUnit
     public CombatUnitStatus CombatStatus { get; private set; }
 
     public CombatSkillExecuter CurrentSkillExecuter { get; private set; }
-    public int CurrentSkillUsage { get; internal set; }
-    public int SkillUsageMax { get; internal set; }
 
     private CombatResolver Resolver { get; set; }
 
@@ -71,7 +74,5 @@ public class CombatUnit
         CombatStatus.Reset();
 
         CurrentSkillExecuter = null;
-        CurrentSkillUsage = Skill.SkillCurrentUsage;
-        SkillUsageMax = Skill.SkillMaxUsage;
     }
 }
