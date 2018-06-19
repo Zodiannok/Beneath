@@ -18,31 +18,31 @@ public class UnitPanel : MonoBehaviour {
     {
         Transform temp;
 
-        temp = transform.FindChild("TextName");
+        temp = transform.Find("TextName");
         if (temp)
         {
             UnitNameText = temp.GetComponent<Text>();
         }
 
-        temp = transform.FindChild("TextSkill");
+        temp = transform.Find("TextSkill");
         if (temp)
         {
             UnitSkillText = temp.GetComponent<Text>();
         }
 
-        temp = transform.FindChild("TextSkillUsage");
+        temp = transform.Find("TextSkillUsage");
         if (temp)
         {
             UnitSkillUsageText = temp.GetComponent<Text>();
         }
 
-        temp = transform.FindChild("TextHP");
+        temp = transform.Find("TextHP");
         if (temp)
         {
             UnitHPText = temp.GetComponent<Text>();
         }
 
-        temp = transform.FindChild("HPBar");
+        temp = transform.Find("HPBar");
         if (temp)
         {
             UnitHPBar = temp.GetComponent<Scrollbar>();

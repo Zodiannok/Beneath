@@ -136,11 +136,15 @@ public class CombatResolver {
         CombatUnit user = executer.Owner;
 
         // Check if the skill can be used (user is alive, skill is not used up, etc.)
-        if (user.Unit == null || user.Unit.IsDead)
+        if (user == null || user.CombatStatus.SkillUsed)
         {
             executer.Interrupt();
         }
-        if (userSkill == null || userSkill.SkillCurrentUsage == 0)
+        else if (user.Unit == null || user.Unit.IsDead)
+        {
+            executer.Interrupt();
+        }
+        else if (userSkill == null || userSkill.SkillCurrentUsage == 0)
         {
             executer.Interrupt();
         }
@@ -161,6 +165,7 @@ public class CombatResolver {
             // The skill is now triggered. Decrement skill usage times right now.
             // If another reaction skill cancels this skill, the skill will still be consumed.
             --userSkill.SkillCurrentUsage;
+            user.CombatStatus.SkillUsed = true;
 
             // Check if any reactions are triggered.
             // Reactions may modify declareEvent, causing the attempt to use this skill to fail.
