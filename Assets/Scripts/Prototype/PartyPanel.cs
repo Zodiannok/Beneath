@@ -68,9 +68,9 @@ public class PartyPanel : MonoBehaviour {
 	// Use this for initialization
 	void Start ()
     {
-        DefensePanel = transform.FindChild("PanelDef");
-        AttackPanel = transform.FindChild("PanelAtk");
-        SupportPanel = transform.FindChild("PanelSup");
+        DefensePanel = transform.Find("PanelDef");
+        AttackPanel = transform.Find("PanelAtk");
+        SupportPanel = transform.Find("PanelSup");
 	}
 	
 	// Update is called once per frame
